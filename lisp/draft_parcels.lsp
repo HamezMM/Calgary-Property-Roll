@@ -34,6 +34,23 @@
   (mapcar 'parse-point (str-split ptsstr "|"))
 )
 
+;; Curated ACI color indices, chosen to stay visually distinct from each
+;; other and from black/white (7) and gray (8/9) backgrounds; cycled as
+;; each new land-use layer is created so every layer gets its own color.
+(setq *parcel-layer-palette*
+  '(1 2 3 4 5 6 30 50 70 90 110 130 150 170 190 210 230 250
+    14 24 34 44 54 64 74 84 94 104)
+)
+(setq *parcel-layer-color-index* 0)
+
+(defun next-layer-color ( / color)
+  (setq color
+    (nth (rem *parcel-layer-color-index* (length *parcel-layer-palette*)) *parcel-layer-palette*)
+  )
+  (setq *parcel-layer-color-index* (1+ *parcel-layer-color-index*))
+  color
+)
+
 (defun ensure-layer (name)
   (if (not (tblsearch "LAYER" name))
     (entmake
@@ -43,7 +60,7 @@
         '(100 . "AcDbLayerTableRecord")
         (cons 2 name)
         '(70 . 0)
-        '(62 . 7)
+        (cons 62 (next-layer-color))
         '(6 . "Continuous")
       )
     )
@@ -105,6 +122,7 @@
 
 (defun c:DRAFTPARCELS ( / folder csvfiles layer total total-parcels)
   (regapp "PDG_PARCEL")
+  (setq *parcel-layer-color-index* 0)
   (setq folder (browse-folder))
   (if (not folder)
     (princ "\nNo folder selected. Aborted.")
