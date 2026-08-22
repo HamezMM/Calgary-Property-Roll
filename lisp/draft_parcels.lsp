@@ -2,13 +2,13 @@
 ;;; Drafts closed LWPOLYLINEs for Calgary tax roll parcels from a folder of
 ;;; pre-cleaned CSVs produced by scripts/clean_and_split.py.
 ;;;
-;;; Run once per top-level LAND_USE_DESIGNATION folder, e.g.
-;;; Tax_CSVs_Clean/C-C1/. Underneath that, CSVs sit two folders deep:
-;;;   <land use>/<Residential|Non-Residential|Farm Land>/<COMM_NAME>/*.csv
+;;; Run once per top-level folder, e.g. Tax_CSVs_Clean/ or
+;;; Tax_CSVs_Clean/Residential/. Underneath that, CSVs sit two folders deep:
+;;;   <Residential|Non-Residential|Farm Land>/<COMM_NAME>/<LAND_USE_DESIGNATION>.csv
 ;;; Every CSV found anywhere under the selected folder is grouped by its
-;;; immediate parent folder (COMM_NAME) -> one layer per neighbourhood
-;;; (created if it doesn't exist), combining Residential and
-;;; Non-Residential CSVs for the same community onto the same layer. Every
+;;; filename (LAND_USE_DESIGNATION) -> one layer per zoning designation
+;;; (created if it doesn't exist), combining every neighbourhood and
+;;; assessment class that shares that zoning onto the same layer. Every
 ;;; row in every CSV is one closed ring, drafted on that layer with its
 ;;; ADDRESS attached as xdata under the "PDG_PARCEL" application (group
 ;;; 1000, string).
@@ -18,7 +18,7 @@
 ;;;   ADDRESS is guaranteed comma-free by the cleaning script.
 ;;;
 ;;; Usage: (load "draft_parcels.lsp") then run DRAFTPARCELS, pick the
-;;; top-level land-use folder.
+;;; top-level folder.
 
 (vl-load-com)
 
@@ -42,7 +42,7 @@
 
 ;; Curated ACI color indices, chosen to stay visually distinct from each
 ;; other and from black/white (7) and gray (8/9) backgrounds; cycled as
-;; each new neighbourhood layer is created so every layer gets its own color.
+;; each new zoning layer is created so every layer gets its own color.
 (setq *parcel-layer-palette*
   '(1 2 3 4 5 6 30 50 70 90 110 130 150 170 190 210 230 250
     14 24 34 44 54 64 74 84 94 104)
@@ -113,7 +113,7 @@
   (setq shellapp (vlax-create-object "Shell.Application"))
   (setq folderobj
     (vlax-invoke-method shellapp 'BrowseForFolder 0
-      "Select top-level land-use folder (CSVs are grouped by neighbourhood):" 0
+      "Select top-level folder (CSVs are grouped by land use zoning):" 0
     )
   )
   (setq path
@@ -126,29 +126,19 @@
   path
 )
 
-(defun path-leaf (path / i)
-  (setq i (strlen path))
-  (while (and (> i 0) (/= (substr path i 1) "\\"))
-    (setq i (1- i))
-  )
-  (substr path (1+ i))
-)
-
 ;; Recurses through folder, collecting every *.csv found anywhere below it
-;; into groups keyed by each file's immediate parent folder name
-;; (the neighbourhood/COMM_NAME folder). groups is an alist of
-;; (neighbourhood-name . (full-csv-path ...)), accumulated and returned.
-(defun collect-csv-groups (folder groups / csvfiles subdirs entry existing)
+;; into groups keyed by each file's own base name (the LAND_USE_DESIGNATION
+;; / zoning code). groups is an alist of (zoning-name . (full-csv-path ...)),
+;; accumulated and returned.
+(defun collect-csv-groups (folder groups / csvfiles subdirs name existing)
   (setq csvfiles (vl-directory-files folder "*.csv" 1))
-  (if csvfiles
-    (progn
-      (setq entry (cons (path-leaf folder) (mapcar (function (lambda (f) (strcat folder "\\" f))) csvfiles)))
-      (setq existing (assoc (car entry) groups))
-      (setq groups
-        (if existing
-          (subst (cons (car existing) (append (cdr existing) (cdr entry))) existing groups)
-          (append groups (list entry))
-        )
+  (foreach f csvfiles
+    (setq name (vl-filename-base f))
+    (setq existing (assoc name groups))
+    (setq groups
+      (if existing
+        (subst (cons name (append (cdr existing) (list (strcat folder "\\" f)))) existing groups)
+        (append groups (list (cons name (list (strcat folder "\\" f)))))
       )
     )
   )
@@ -183,7 +173,7 @@
             (setq total-parcels (+ total-parcels total))
             (princ (strcat "\n" name ": " (itoa total) " parcel(s) drafted."))
           )
-          (princ (strcat "\nDone. " (itoa total-parcels) " parcel(s) across " (itoa (length groups)) " neighbourhood layer(s)."))
+          (princ (strcat "\nDone. " (itoa total-parcels) " parcel(s) across " (itoa (length groups)) " zoning layer(s)."))
         )
       )
     )
