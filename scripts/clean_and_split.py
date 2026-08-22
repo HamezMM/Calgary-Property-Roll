@@ -13,6 +13,14 @@ Each output CSV has two columns: ADDRESS, POINTS
     POINTS is a "|"-separated list of "x y" pairs (local meters, city-center
     origin), one closed ring per row. A parcel with multiple rings (holes or
     multi-part MULTIPOLYGONs) produces one row per ring, sharing the address.
+
+If the city's export is pre-split into one file per LAND_USE_DESIGNATION
+(as under Tax CSVs/), run this script once per input file but point every
+run at the SAME out_dir (e.g. Tax_CSVs_Clean/) rather than a fresh
+subfolder per input file -- the script already groups rows by class/comm
+/land_use inside out_dir, so a shared out_dir merges runs correctly instead
+of nesting a redundant top-level folder per input, which is what left
+Tax_CSVs_Clean/ needing scripts/flatten_tax_csvs_clean.py to repair.
 """
 
 import argparse
@@ -32,7 +40,15 @@ INVALID_NAME_CHARS = re.compile(r'[\\/:*?"<>|]')
 
 
 def sanitize_name(name):
+    """Sanitize a value for use as a path component / AutoCAD layer name.
+
+    LAND_USE_DESIGNATION can be a comma-joined list of zoning codes (e.g.
+    "DC,I-G,I-H"); AutoCAD forbids commas (and the other INVALID_NAME_CHARS)
+    in layer/symbol names, so commas become "-" rather than "_" to stay
+    readable while the rest of the invalid set collapses to "_".
+    """
     name = (name or "UNSPECIFIED").strip()
+    name = name.replace(",", "-")
     name = INVALID_NAME_CHARS.sub("_", name)
     return name or "UNSPECIFIED"
 
